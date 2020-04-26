@@ -1,7 +1,10 @@
 import os
 import socket
 import subprocess
+import threading
 import time
+from contextlib import redirect_stdout
+
 try:
     from urllib.request import Request
     from urllib.request import urlopen
@@ -71,16 +74,28 @@ class VcsClientBase(object):
                 }
         return None
 
-
+ui_lock = threading.Lock()
+import sys
+import fileinput
 def run_command(cmd, cwd, env=None):
     if not os.path.exists(cwd):
         cwd = None
     result = {'cmd': ' '.join(cmd), 'cwd': cwd}
     try:
         proc = subprocess.Popen(
-            cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            cmd, cwd=cwd, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
             env=env)
-        output, _ = proc.communicate()
+
+        with ui_lock:
+            try:
+                input()
+                output, _ = proc.communicate(fileinput.input().
+                    timeout=1)
+            except TimeoutError as e:
+                pass
+
         result['output'] = output.rstrip().decode('utf8')
         result['returncode'] = proc.returncode
     except subprocess.CalledProcessError as e:
